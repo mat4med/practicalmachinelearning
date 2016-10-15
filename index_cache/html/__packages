@@ -1,0 +1,13 @@
+base
+lattice
+ggplot2
+caret
+survival
+Formula
+Hmisc
+randomForest
+foreach
+iterators
+doParallel
+combinat
+rattle

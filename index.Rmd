@@ -1,0 +1,146 @@
+---
+title: "Practical Machine Learning Project"
+author: "Medhat S."
+date: "October 11, 2016"
+output: html_document
+---
+
+#### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.  
+This report describes:  
++ How the model is built,  
++ How the cross validation is used,  
++ The expection of out of sample error  
+  
+  
+#### Load Data
+  
+```{r echo=TRUE, cache=TRUE}
+## load training data set
+pml.training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+```
+
+#### Explore Data
+
+```{r eval=FALSE}
+summary(pml.training)
+```
+ >     ::: 
+ >     pitch_belt          yaw_belt       total_accel_belt kurtosis_roll_belt
+ >     Min.   :-55.8000   Min.   :-180.00   Min.   : 0.00             :19216   
+ >     1st Qu.:  1.7600   1st Qu.: -88.30   1st Qu.: 3.00    #DIV/0!  :   10   
+ >     Median :  5.2800   Median : -13.00   Median :17.00    -1.908453:    2   
+ >     Mean   :  0.3053   Mean   : -11.21   Mean   :11.31    -0.016850:    1   
+ >     3rd Qu.: 14.9000   3rd Qu.:  12.90   3rd Qu.:18.00    -0.021024:    1   
+ >     Max.   : 60.3000   Max.   : 179.00   Max.   :29.00    -0.025513:    1   
+ >                                                           (Other)  :  391   
+ >     kurtosis_picth_belt kurtosis_yaw_belt skewness_roll_belt skewness_roll_belt.1
+ >              :19216            :19216              :19216             :19216     
+ >     #DIV/0!  :   32     #DIV/0!:  406     #DIV/0!  :    9    #DIV/0!  :   32     
+ >     47.000000:    4                       0.000000 :    4    0.000000 :    4     
+ >     -0.150950:    3                       0.422463 :    2    -2.156553:    3     
+ >     -0.684748:    3                       -0.003095:    1    -3.072669:    3     
+ >     -1.750749:    3                       -0.010002:    1    -6.324555:    3     
+ >     (Other)  :  361                       (Other)  :  389    (Other)  :  361  
+ >     :::
+   
+By looking to training data, find some observation has "#DIV/0!", NA, or blank values, then data cleaning is needed.
+  
+#### Clean Data
+```{r echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+## use parallel processing
+library(doParallel)
+cl <- makeCluster(4)
+registerDoParallel(cl)
+
+## load required libraries
+library(caret)
+library(Hmisc)
+library(combinat)
+library(rattle)
+
+set.seed(1234)
+
+## remove nearZeroVar-iance variables
+nsv <- nearZeroVar(pml.training, saveMetrics = T)
+pml.training <- pml.training[, !nsv$nzv]
+
+## drop columns have more than 50% blank or invalid values
+## and imputate the rest if needed
+drop_cols <- c()	# store column names to drop them
+col_names <- names(pml.training)	# store existing column names
+for(i in 1:length(pml.training)) {
+    if( sum( is.na(pml.training[, i] ) ) / nrow(pml.training) >= 0.5) {
+        ## save the column name to drop it later
+        drop_cols <- c(drop_cols, col_names[i])
+    }else{
+        ## imputation of mean for missing values:
+        pml.training[,i] <- impute(pml.training[,i], fun = mean)
+    }
+}
+
+## drop variables with more the 50% missing values:
+pml.training <- pml.training[ , !(col_names %in% drop_cols)]
+```
+  
+#### Train and Test Sets
+```{r echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+## create train and test sets
+inTrain <- createDataPartition(y=pml.training$classe, p=0.75, list=FALSE)
+training <- pml.training[inTrain,]
+testing <- pml.training[-inTrain,]
+```
+  
+#### Train the model using Random Forest (rf) algorithm  
+Random Forest algorith creates several subsets of trees, and then averages them together to find the best model.
+  
+```{r modelFit, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+modelFit <- train(classe ~ ., method="rf", data=training)
+
+## model summary
+print(modelFit)
+
+print(modelFit$finalModel)
+plot(modelFit$finalModel)
+```
+  
+#### Predict on testing data set  
+```{r prediction, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+confMatrix <- confusionMatrix(testing$classe, predict(modelFit,testing))
+  
+## model accuracy on testing data
+confMatrix$overall
+plot(confMatrix$table, confMatrix$byClass)
+```
+  
+#### K-fold Cross Validation  
+Use 10-fold cross validation to estimate Naive Bayes on the pml.training dataset.  
+The k-fold cross validation method splits the dataset into k-subsets (here k=10). For each subset is held out while the model is trained on all other subsets. This process is completed until accuracy is determine for each instance in the dataset, and an overall accuracy estimate is provided.
+  
+```{r cross_validation, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+## define training control
+train_control <- trainControl(method="cv", number=10)
+  
+## train the model
+model <- train(classe ~ ., data=pml.training, trControl=train_control, 
+	method="rf", tuneGrid=data.frame(mtry=3))
+  
+## summarize results
+print(model)
+model$finalModel
+```
+  
+#### Conclusion
+Using the model for prediction on testing data shows ```r confMatrix$overall["Accuracy"]``` and from the confusion matrix, can see the model has a good accuracy.
+  
+  
+  
