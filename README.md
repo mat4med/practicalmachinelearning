@@ -1,1 +1,3 @@
-# practical machine learning project
+# practicalmachinelearning
+Coursera JHU Practical Machine Learning
+

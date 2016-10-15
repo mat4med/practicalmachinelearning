@@ -1,12 +1,6 @@
----
-title: "Practical Machine Learning Project"
-author: "Medhat S."
-date: "October 11, 2016"
-
-output:  
-      html_document:  
-        keep_md: true  
----
+# Practical Machine Learning Project
+Medhat S.  
+October 11, 2016  
 
 #### Background
 
@@ -27,14 +21,16 @@ This report describes:
   
 #### Load Data
   
-```{r echo=TRUE, cache=TRUE}
+
+```r
 ## load training data set
 pml.training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
 ```
 
 #### Explore Data
 
-```{r eval=FALSE}
+
+```r
 summary(pml.training)
 ```
  >     ::: 
@@ -59,7 +55,8 @@ summary(pml.training)
 By looking to training data, find some observation has "#DIV/0!", NA, or blank values, then data cleaning is needed.
   
 #### Clean Data
-```{r echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+
+```r
 ## use parallel processing
 library(doParallel)
 cl <- makeCluster(4)
@@ -96,7 +93,8 @@ pml.training <- pml.training[ , !(col_names %in% drop_cols)]
 ```
   
 #### Train and Test Sets
-```{r echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+
+```r
 ## create train and test sets
 inTrain <- createDataPartition(y=pml.training$classe, p=0.75, list=FALSE)
 training <- pml.training[inTrain,]
@@ -106,30 +104,91 @@ testing <- pml.training[-inTrain,]
 #### Train the model using Random Forest (rf) algorithm  
 Random Forest algorith creates several subsets of trees, and then averages them together to find the best model.
   
-```{r modelFit, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+
+```r
 modelFit <- train(classe ~ ., method="rf", data=training)
 
 ## model summary
 print(modelFit)
+```
 
+```
+## Random Forest 
+## 
+## 14718 samples
+##    58 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Bootstrapped (25 reps) 
+## Summary of sample sizes: 14718, 14718, 14718, 14718, 14718, 14718, ... 
+## Resampling results across tuning parameters:
+## 
+##   mtry  Accuracy   Kappa      Accuracy SD   Kappa SD    
+##    2    0.9939906  0.9923999  0.0015047355  0.0019031288
+##   41    0.9998522  0.9998131  0.0001768474  0.0002235667
+##   80    0.9998449  0.9998039  0.0001821193  0.0002302316
+## 
+## Accuracy was used to select the optimal model using  the largest value.
+## The final value used for the model was mtry = 41.
+```
+
+```r
 print(modelFit$finalModel)
+```
+
+```
+## 
+## Call:
+##  randomForest(x = x, y = y, mtry = param$mtry) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 41
+## 
+##         OOB estimate of  error rate: 0%
+## Confusion matrix:
+##      A    B    C    D    E class.error
+## A 4185    0    0    0    0           0
+## B    0 2848    0    0    0           0
+## C    0    0 2567    0    0           0
+## D    0    0    0 2412    0           0
+## E    0    0    0    0 2706           0
+```
+
+```r
 plot(modelFit$finalModel)
 ```
+
+![](index_files/figure-html/modelFit-1.png) 
   
 #### Predict on testing data set  
-```{r prediction, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+
+```r
 confMatrix <- confusionMatrix(testing$classe, predict(modelFit,testing))
   
 ## model accuracy on testing data
 confMatrix$overall
+```
+
+```
+##       Accuracy          Kappa  AccuracyLower  AccuracyUpper   AccuracyNull 
+##      0.9995922      0.9994841      0.9985276      0.9999506      0.2846656 
+## AccuracyPValue  McnemarPValue 
+##      0.0000000            NaN
+```
+
+```r
 plot(confMatrix$table, confMatrix$byClass)
 ```
+
+![](index_files/figure-html/prediction-1.png) 
   
 #### K-fold Cross Validation  
 Use 10-fold cross validation to estimate Naive Bayes on the pml.training dataset.  
 The k-fold cross validation method splits the dataset into k-subsets (here k=10). For each subset is held out while the model is trained on all other subsets. This process is completed until accuracy is determine for each instance in the dataset, and an overall accuracy estimate is provided.
   
-```{r cross_validation, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+
+```r
 ## define training control
 train_control <- trainControl(method="cv", number=10)
   
@@ -139,11 +198,51 @@ model <- train(classe ~ ., data=pml.training, trControl=train_control,
   
 ## summarize results
 print(model)
+```
+
+```
+## Random Forest 
+## 
+## 19622 samples
+##    58 predictor
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold) 
+## Summary of sample sizes: 17659, 17660, 17659, 17660, 17660, 17660, ... 
+## Resampling results
+## 
+##   Accuracy   Kappa      Accuracy SD   Kappa SD  
+##   0.9996433  0.9995488  0.0004195073  0.00053061
+## 
+## Tuning parameter 'mtry' was held constant at a value of 3
+## 
+```
+
+```r
 model$finalModel
+```
+
+```
+## 
+## Call:
+##  randomForest(x = x, y = y, mtry = param$mtry) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 3
+## 
+##         OOB estimate of  error rate: 0.04%
+## Confusion matrix:
+##      A    B    C    D    E  class.error
+## A 5580    0    0    0    0 0.0000000000
+## B    2 3795    0    0    0 0.0005267316
+## C    0    3 3419    0    0 0.0008766803
+## D    0    0    2 3214    0 0.0006218905
+## E    0    0    0    1 3606 0.0002772387
 ```
   
 #### Conclusion
-Using the model for prediction on testing data shows ```r confMatrix$overall["Accuracy"]``` and from the confusion matrix, can see the model has a good accuracy.
+Using the model for prediction on testing data shows ``0.9995922`` and from the confusion matrix, can see the model has a good accuracy.
   
   
   
